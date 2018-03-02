@@ -54,6 +54,7 @@
 #include "utils.h"
 
 #include "dma.h"		// BYDMA
+#include "CAN_Util.h"
 
 
 // has to be moved to a utilities header when it should be
@@ -497,6 +498,16 @@ int main(void) {
 	int b = 2;
 	uint8_t dataFromFlash[128];
 	int okFlash=0;
+	/* Added by Owais */
+	uint32_t ArrIDs[5] = {0x1111,0x1000,0x2222,0x2000,0x3333};
+	CanTxMsgTypeDef canMsgTx;
+	HAL_StatusTypeDef hal_txStat;
+	uint32_t cnt_TxSuccess = 0, cnt_RxSuccess = 0;
+	uint32_t cnt_TxFail = 0;
+	EnumCQErrors enCQErr;
+	CanRxMsgTypeDef canMsgRx;
+	CanRxMsgTypeDef* ptrRxMsg;
+
 	a = a +1;
 	a = a +1;
 	a = a +1;
@@ -518,7 +529,6 @@ int main(void) {
 	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
 	HAL_Init();
 
-
 	/* Configure the system clock */
 	SystemClock_Config();
 
@@ -528,305 +538,76 @@ int main(void) {
 	/* USER CODE END SysInit */
 
 	/* Initialize all configured peripherals */
-	MX_GPIO_Init();
+	//MX_GPIO_Init();
 	greenON;
 	MX_ADC1_Init();
 	//MX_TIM3_Init();// francis
 	 MX_TIM7_Init();
-	//MX_USART2_UART_Init();
-	MX_USART6_UART_Init();
-	//MX_IWDG_Init();
+	 //MX_USART2_UART_Init();
+	 MX_USART6_UART_Init();
+	 //MX_IWDG_Init();
 
-	//MX_I2C2_Init();
-	initializePWM();
-	//dimming(50);
-	//dimming(70);
-	//dimming(100);
-	/* USER CODE BEGIN 2 */
-	HAL_Delay(30);
-
-
-//	memcpy(APN,const_APN,strlen(const_APN));
-//	memcpy(IPPORT,const_MAIN_SERVER,strlen(const_MAIN_SERVER));
-//	memcpy(SERVER_NTP,const_SERVER_NTP,strlen(const_SERVER_NTP));
+	 //MX_I2C2_Init();
+	 initializePWM();
+	 //dimming(50);
+	 //dimming(70);
+	 //dimming(100);
+	 /* USER CODE BEGIN 2 */
+	 HAL_Delay(30);
 
 
-	HAL_TIM_Base_Start_IT(&htim7); 	//Activate IRQ for Timer7
-	if (WDT_ENABLED==1) {
-			 MX_IWDG_Init();
-			__HAL_IWDG_START(&hiwdg); //no se inicializar watchdog, se deshabilita para debug
-			  HAL_IWDG_Refresh(&hiwdg);
-	}
+	 /* Initialize CAN by Owais */
 
+	 bool bInitRes = CAN1_Init(EnBitRate_250K, true, ArrIDs, 5);
 
-	if (0) /// testing writing data at ending of microcontroller. (page 127).
+	 if(bInitRes == false)
+	 {
+		 _Error_Handler(__FILE__, __LINE__);
+	 }
 
-	{
-		okFlash=MIC_Flash_Memory_Read(dataFromFlash, 66);
-		//okFlash=MIC_Flash_Memory_Write("En un lugar de la mancha de cuyo nombre no quiero acordarme...", 62);
-		//okFlash=MIC_Flash_Memory_Read(dataFromFlash, 66);
+	 __enable_irq();
 
-	}
+	 canMsgTx.DLC = 8;
+	 canMsgTx.IDE = CAN_ID_EXT;
+	 canMsgTx.ExtId = 0x111;
+	 canMsgTx.RTR = CAN_RTR_DATA;
 
+	 for(int i=0; i<8; i++)
+		 canMsgTx.Data[i] = i*11+11;
 
-	if (bydma) { // BYDMA
-			DataBuffer	= CircularBuffer (256, &hdma_usart6_rx);
-			MX_DMA_Init();					// set DMA clock and priorities
-			HAL_UART_DMAStop(&huart6);
-	}
-	else {
-		DataBuffer	= CircularBuffer (256, NULL);
-	}
-	uint32_t ta, tb;
+	 while (1)
+	 {
+		 hal_txStat = CAN1_Write_Msg(&canMsgTx);
 
-	if (1) {
-		int rc;
-		int n = 0;
-		ta = HAL_GetTick();
-		// pretrace ("INFO Init modem on start\n", n);
-		do {
-			rc = Modem_Init();
-			n++;
-		} while (rc != M95_OK);
-		tb = HAL_GetTick();
-		modem_init = 1;
+		 if(hal_txStat == HAL_OK)
+			 cnt_TxSuccess++;
+		 else
+			 cnt_TxFail++;
 
-	}
+		 HAL_Delay(500);/* dont send too many messages or the can adapter gets unresponsive */
 
-	if (bydma) {  // BYDMA
-		int tries = 0;
-		HAL_StatusTypeDef rc;
-		do {
-			rc = HAL_UART_Receive_DMA(&huart6, DataBuffer->buffer, DataBuffer->size); // starts DMA reception
-			HAL_Delay(200);
-			tries++;
-		} while  (rc != HAL_OK);
-	}
-	else {
-		HAL_UART_Receive_IT(&huart6, &dataByteBufferIRQ, 1); // Enabling IRQ
-	}
+		 /* Receive all can messages in circular queue buffer */
+		 while(true)
+		 {
+			 ptrRxMsg = CAN1_Read_Msg(&enCQErr);
+			 canMsgRx = *ptrRxMsg;
 
-	// relayActivation(GPIOX2_GPIO_Port,GPIOX2_Pin);
-
-
-	// Create de Variable's Context
-	CreateContext();
-
-
-	if (1) {
-		// Recover connection parameteres from FLASH (really ALLs af them)
-		RecConnParams();
-	}
-#ifdef DEBUG
-	////  Prevalence of locale's connection parameters, if there are
-	if (host){
-			SetVariable("IP",host);
-		if (port){
-			char	sport[8];
-			itoa(port, sport, 10);
-			SetVariable("PORT", sport);
-		}
-		if (user)
-			SetVariable( "USER",user);
-		if (password)
-			SetVariable("PSWD", password);
-
-		char ssec[8];
-		itoa(security, ssec, 10);
-		SetVariable("SEC", ssec);
-
-		if (const_APN)
-			SetVariable("APN", const_APN);
-	}
-	if (0) {
-		
-
-
-		if (updfw_protocol)
-			SetVariable ("UPDFW_PROTO", updfw_protocol);
-
-		if (updfw_server)
-			SetVariable ("UPDFW_HOST", updfw_server);
-
-//		int	updfw_port 				= 0;
-		if (updfw_route)
-			SetVariable("UPDFW_ROUTE", updfw_route);
-
-		if (updfw_name)
-			SetVariable("UPDFW_NAME", updfw_name);
-
-		if (updfw_user)
-			SetVariable("UPDFW_USER", updfw_user);
-
-		if (updfw_password)
-			SetVariable("UPDFW_PSWD", updfw_password);
-
-
-		if (gpio_status)
-			SetVariable ("GPIO", gpio_status);
-
-
-		itoa(PWM_status, strint, 10);
-		SetVariable("PWM", strint);
-
-		itoa(updfw_port, strint, 10);
-		SetVariable("UPDFW_PORT", strint);
-
-	}
-
-
-#endif
-
-
-	// Set the version compilation signature
-	if (fw_version)
-		SetVariable("FWVERSION",fw_version);
-
-	itoa(update_firmware, strint, 10);
-	SetVariable("UPDFW", strint);
-
-	itoa(update_firmware_counter, strint, 10);
-	SetVariable("UPDFW_COUNT", strint);
-
-	// Read the messages's metadata
-	ReadMetadata("", "");
-
-
-
-	do {
-		hmqtt = COMM_Init();
-		ntries++;
-	} while (hmqtt <= 0);
-	tprintf (hmqtt, "Connection Times (%ld TCP + %ld MQTT = %ld TOTAL)\n", (tc1-tc0), (tc2-tc1), (tc2-tc0));
-	if (hmqtt) {
-			extern char	pretrbuf[];
-			long lastget = GetTimeStamp();
-
-			int rc = 1;
-			int cnomssg = 0;
-			greenOFF;
-			blueON;
-			rearm_stored();
-		//	DoAt(daily_rearm, 18, 18, 59);
-			DoAt(daily_rearm, 24, 00, 00);
-#ifdef DEBUG
-//			tprintf (hmqtt, "Modem takes %ld msec to init", (tb -ta));
-			rc = tprintf (hmqtt, "Go to the loop after %d tries(%s)!!", ntries, strDateTime());
-			if (strlen(pretrbuf)){
-				tprintf (hmqtt, "PRE is %s", pretrbuf);
-			}
-
-#endif
-			 /* Main loop only if we are connected and subscribed.
-				Inside loop one Ping packet must be sent in order to manage the keep alive
-				before expiration time of client elapses. (here, the expiration time is  'data.keepAliveInterval = 300', 300 seconds.
-			 */
-
-			  /* Infinite loop */
-			  /* USER CODE BEGIN WHILE */
-
-			RecAppParams();
-
-			while (1) {
-				if  (rc > 0) {
-					char 	buffer[256];
-					char *mssg = NULL;
-					if (WDT_ENABLED==1) HAL_IWDG_Refresh(&hiwdg);
-//						tprintf (hmqtt, "Going to Poll for incoming commands...!!");
-		    	 		if (1)
-		    	 		  	mssg = MqttGetMessage(hmqtt, buffer, 256);
-		    	 		else {
-		    	 		  	mssg = GetLocalMessage(hmqtt, buffer, 256);
-		    	 		}
-//						tprintf (hmqtt, "After polling...!!");
-
-						if (mssg) {
-								cnomssg = 0;
-								lastget = GetTimeStamp();
-#ifdef DEBUG
-								tprintf (hmqtt , "Incoming message #%s#", mssg);
-#endif
-								char *out = ProcessMessage (mssg);
-								if (out) {
-									// tprintf (hmqtt , "Message replay is:\n%s", out);
-									rc = MqttPutMessage(hmqtt, topicpub, out);
-//									tprintf (hmqtt , "Reply %s published into %s", out, topicpub);
-
-								}
-						}
-						else { // NO MSSG
-#ifdef DEBUG
-						//		tprintf (hmqtt, "No mssg in queue");
-#endif
-								Schedule();
-								if (GetTimeStamp() - lastget > TIMEPING){
-									lastget = GetTimeStamp();
-//									tprintf (hmqtt, "BEFORE sending Ping...!!");
-									rc = MqttPing(hmqtt);
-//									tprintf (hmqtt, "AFTER sending Ping...(%d)!!", nirqs);
-									if (rc < 1)  // second try
-										rc = MqttPing(hmqtt);
-									if (rc < 1) {
-										//  It seems we are'nt receiving anymore
-#ifdef DEBUG
-										tprintf (hmqtt, "Sended Ping  getting %d instead of PINGRESP (%d irqs)", rc, nirqs);
-
-										rc = MqttPing(hmqtt);
-										rc = 1;
-#endif
-
-										if (1) {
-#ifdef DEBUG
-											tprintf (hmqtt, "Ready  to reconnection or reboot!!! ");
-#endif
-
-											ntries = 0;
-											do {
-												hmqtt = FULLNEWCONN();
-												ntries++;
-											} while (hmqtt <= 0);
-#ifdef DEBUG
-											rc = tprintf (hmqtt, "earing recovered after %d tries!!", ntries);
-#endif
-										}
-									}
-									else {
-#ifdef DEBUG
-										rc = tprintf (hmqtt, "Sended Ping getting %d (%s)", rc, strDateTime());
-#endif
-									}
-									cnomssg = 0;
-								}
-
-						}
-			      } //
-			      else {
-#ifdef DEBUG
-			    	  tprintf (hmqtt, "RC invalido %d", rc);
-#endif
-			    	  ntries = 0;
-			    	  do {
-			    			hmqtt = COMM_Init();
-			    			ntries++;
-			    	  } while (hmqtt <= 0);
-#ifdef DEBUG
-			    	  tprintf (hmqtt, "RECONNECTED because of communication breakdown!!!!");
-#endif
-			      }
-
+			 if(enCQErr == CQ_ERROR_OK)
+			 {
+				 cnt_RxSuccess++;
 			 }
-				 //  not connected ... retry or exit?
-		}
+			 else
+			 {
+				 break;
+			 }
+		 }
+		 /* CAN RX processing loop */
+	 }
 
+	 /* USER CODE END 2 */
 
-
-
-
-
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+	 /* Infinite loop */
+	 /* USER CODE BEGIN WHILE */
 
 }
 
@@ -1090,7 +871,7 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
                           |GPIO_PIN_11|Relay1_Pin|GPIO_PIN_14|GPIO_PIN_15
                           |GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
+                          |GPIO_PIN_7, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOD, GPIO_PIN_2, GPIO_PIN_RESET);
@@ -1129,11 +910,11 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : PB0 PB1 PB2 PB10
                            PB11 Relay1_Pin PB14 PB15
                            PB3 PB4 PB5 PB6
-                           PB7 PB8 PB9 */
+                           PB7*/
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
                           |GPIO_PIN_11|Relay1_Pin|GPIO_PIN_14|GPIO_PIN_15
                           |GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
+                          |GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
