@@ -57,8 +57,6 @@
 #include "CAN_Util.h"
 
 
-// has to be moved to a utilities header when it should be
-extern 	int		tprintf(int hcon, char *texto,...);
 
 TIM_HandleTypeDef    TimHandle;
 TIM_OC_InitTypeDef sConfig;
@@ -66,22 +64,15 @@ TIM_OC_InitTypeDef sConfig;
 
 /* USER CODE END Includes */
 
-ADC_HandleTypeDef hadc1;
 
 IWDG_HandleTypeDef hiwdg;
 
-TIM_HandleTypeDef htim3;
-TIM_HandleTypeDef htim7;
-TIM_OC_InitTypeDef sConfig;
 
-UART_HandleTypeDef huart2;
-UART_HandleTypeDef huart6;
 DMA_HandleTypeDef hdma_usart6_rx;
 
 UART_HandleTypeDef huartDummy;
 /// It is defined a variable but it is not going to be used.
 
-#define GPRS_UART huart6
 
 /* USER CODE BEGIN PV */
 /* Private variables ---------------------------------------------------------*/
@@ -92,14 +83,63 @@ UART_HandleTypeDef huartDummy;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_ADC1_Init(void);
-static void MX_TIM3_Init(void);
-static void MX_TIM7_Init(void);
-static void MX_USART2_UART_Init(void);
-static void MX_USART6_UART_Init(void);
 static void MX_IWDG_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
+
+
+/*********************************************************************
+ * PRIVATE VARIABLES TO DEBUG Digital-Sensors_Development CODE
+ */
+#include "GPIO_wrapper.h"
+
+
+EMU_GPIO_Signal CS_1;
+EMU_GPIO_Signal SCK_1;
+EMU_GPIO_Signal SDI_1;
+EMU_GPIO_Signal SDO_1;
+uint16_t TIMMING_1 = 50;
+SensorType SENSOR1;
+SignalsValue SENSOR1_SIGNALS_RH;
+SignalsValue SENSOR2_SIGNALS_RH;
+SignalsValue SENSOR3_SIGNALS_RH;
+SignalsValue SENSOR1_SIGNALS_TA;
+SignalsValue SENSOR2_SIGNALS_TA;
+SignalsValue SENSOR3_SIGNALS_TA;
+
+
+// sequence humidity RH
+
+ char *Stream_CS_RH_1 =  "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+char *Stream_SDI_RH_1 = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+
+char *Stream_SCK_RH_1 = "XXXXXXXX1101100010101010101010100010";
+char *Stream_SDO_RH_1 = "11111111100011000XXXXXXXX1X0X1XXXXXX";
+
+char *Stream_SDI_RH_1_partB = "XXXXXXXXXXXXXXXXXXXX";
+char *Stream_CS_RH_1_partB =  "XXXXXXXXXXXXXXXXXXXX";
+char *Stream_SCK_RH_1_partB = "1010101010101010XX10";
+
+ char *Stream_SDO_RH_1_partB = "RXRXRXRXRXRXRXRXX000";
+ char *Stream_SDO_RH_1_partCHK = "RXRXRXRXRXRXRXRXXXXX";
+
+
+
+// sequence temperature
+
+char *Stream_CS_TA_1 =  "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+char *Stream_SDI_TA_1 = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+char *Stream_SCK_TA_1 = "XXXXXXXX1101100010101010101010100010";
+char *Stream_SDO_TA_1 = "11111111100011000XXXXXXXXXX1XXXXXXXX";
+
+char *Stream_SDI_TA_1_partB = "XXXXXXXXXXXXXXXXXXXX";
+char *Stream_CS_TA_1_partB =  "XXXXXXXXXXXXXXXXXXXX";
+char *Stream_SCK_TA_1_partB = "1010101010101010XX10";
+
+char *Stream_SDO_TA_1_partB = "RXRXRXRXRXRXRXRXX000";
+char *Stream_SDO_TA_1_partCHK = "RXRXRXRXRXRXRXRXXXXX";
+/*****************************************************************************/
+
 
 /* USER CODE BEGIN PFP */
 /* Private function prototypes -----------------------------------------------*/
@@ -107,524 +147,81 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-  int elapsed10secondsAux=0;
-  uint16_t elapsed10seconds=0; 					// At beginning this is 0
-  uint8_t LOG_ACTIVATED=0;				 		/// Enable to 1 if you want to show log through logUART
-  uint8_t LOG_GPRS=0;  							/// For showing only GPRS information
-  uint8_t WDT_ENABLED=0;						 /// Enable for activate independent watch dog timer
-  uint8_t timeoutGPRS=0; 						/// At beginning this is 0
-  uint32_t timeout=1000;				 		/// Timeout between AT command sending is 1000 milliseconds.
-  uint8_t rebootSystem=0;						 /// At beginning this is 0
-  uint8_t nTimesMaximumFail_GPRS=2; 			/// For initial loop of initializing GPRS device
-  uint8_t retriesGPRS=1; 						/// only one retries per AT command if something goes wrong
-  uint8_t existDNS=1; 							/// The IP of main server to connect is not 4 number separated by dot. It is a DNS.
-  uint8_t offsetLocalHour=0; 					/// for getting UTC time
-//  uint8_t APN[SIZE_APN]; 						/// Array where is saved the provider APN (format as example in Definitions.h)
-//  uint8_t IPPORT[SIZE_MAIN_SERVER]; 			/// Array where is saved main destination server to connect (IP and PORT format as example in Definitions.h)
-//  uint8_t SERVER_NTP[SIZE_NTP_SERVER]; 			/// Array where is saved server NTP to get UTC time (format as example in Definitions.h)
-//  uint8_t calendar[10];               			/// Array for saving all calendar parameters get from NTC server
-//  uint8_t idSIM[30];                 			 /// Array where is saved ID from SIMcard
-  uint8_t openFastConnection=0;      			 /// by default to 0, it is used for doing a quick connection when it is needed to call the connect function again
-  uint8_t setTransparentConnection=1;  			/// 1 for transparent connection, 0 for non-transparent. Then all data flow is command AT+ data
-//  uint8_t GPRSbuffer[SIZE_GPRS_BUFFER];			 /// received buffer with data from GPRS
-  uint8_t dataByteBufferIRQ;  					/// Last received byte from GPRS
-  //uint16_t GPRSBufferReceivedBytes;     		/// Number of received data from GPRS after a cleanningReceptionBuffer() is called
-  //uint16_t indexGPRSBufferReceived;
-  //uint16_t indexPickingReceivedBytes=0;
-  uint8_t connected=0;
-  //unsigned char buffer2[SIZE_GPRS_BUFFER];
-  int32_t quantityReceived=0;
-/* USER CODE END 0 */
 
 
-extern int	COMM_Init();
+int main(void)
+{
 
-char	*topicpub = 0;
-char	*topicsub = 0;
-char	*topicbrcast = 0;
-char	*topictr = 0;
+  /* USER CODE BEGIN 1 */
+	uint8_t value = 0;
+	uint8_t  readwrite= 0;
+	float Temperature = 0;
+	float RelativeHumidity = 0;
+  /* USER CODE END 1 */
+  /* MCU Configuration----------------------------------------------------------*/
 
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
 
-int		bydma = 1;
+  /* USER CODE BEGIN Init */
 
+  /* USER CODE END Init */
 
-int		nirqs = 0;
+  /* Configure the system clock */
+  SystemClock_Config();
 
-int		hmqtt; 			// handle to the mqtt connection. Has to be a SIGNED integer
+  /* USER CODE BEGIN SysInit */
 
+  /* USER CODE END SysInit */
 
-int		connections = 0;  // this counter gives us a hint for distinguish reboot/connection
+  /* Initialize all configured peripherals */
+ // MX_GPIO_Init();
+  /* USER CODE BEGIN 2 */
 
-// shoots to get connection times
-uint32_t	tc0, //	start connection
-			tc1, // after open IP
-			tc2, // broker connected
-			tc3;
 
+	value = EMU_GPIO_config(&CS_1,PB1, OUTPUT,UP);
+	value = EMU_GPIO_config(&SCK_1,PC8, OUTPUT,NONE);
+	value = EMU_GPIO_config(&SDI_1,PB1, OUTPUT,UP);
+	value = EMU_GPIO_config(&SDO_1,PB14, OPENDRAIN,UP);
 
-st_CB *DataBuffer;
+  //HAL_Delay(1000);
 
+  config_Sensor(&SENSOR1, CS_1, SCK_1, SDI_1, SDO_1, TIMMING_1);
 
-int		conti = 0; // provisional
-/////////////////////////////////////////////////////////////////////////////////////////////
-//	Open connection (from scratch OR over a established connection)
-//		if mode param is 0, open from scratch, else reopen on new host and/or credentials
-//
-//	The function doesn't take any parameters (get all of then from the Context)
-//	Makes all calling the transport and broker functions
-//
-//    First: try to connect using the 'default' broker parameters
-//              (if succeeds, stores those default values as 'last successful connection'
-//    If that fails, makes a second try with the 'last successful connection' (contingency)
-/////////////////////////////////////////////////////////////////////////////////////////////
-int	OpenConnection(unsigned int mode){
 
-	int		hconn;
-	int 	try = 0; // 1 default, 2 contingency
-//	char 	*kind = "";
-	int 	rc;
+  /* USER CODE END 2 */
 
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+  /* USER CODE END WHILE */
 
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1, Stream_SDI_RH_1, Stream_SDO_RH_1, Stream_SCK_RH_1, &SENSOR1_SIGNALS_RH);
+		HAL_Delay(90);
 
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partB, Stream_SCK_RH_1_partB, &SENSOR1_SIGNALS_RH);
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partB, Stream_SCK_RH_1_partB, &SENSOR2_SIGNALS_RH);
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partCHK, Stream_SCK_RH_1_partB, &SENSOR3_SIGNALS_RH);
 
+		HAL_Delay(3000);
 
-	// First, try with default broker parameters
-	char	*h = GetVariable("IP");
-	unsigned int p = atoi(GetVariable("PORT"));
-	int	s = atoi(GetVariable("SEC"));
-	char	*us = GetVariable("USER");
-	char	*pw = GetVariable("PSWD");
-	char	*apn = GetVariable("APN");
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1, Stream_SDI_TA_1, Stream_SDO_TA_1, Stream_SCK_TA_1, &SENSOR1_SIGNALS_TA);
+		HAL_Delay(400);
 
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partB, Stream_SCK_TA_1_partB, &SENSOR1_SIGNALS_TA);
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partB, Stream_SCK_TA_1_partB, &SENSOR2_SIGNALS_TA);
+		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partCHK, Stream_SCK_TA_1_partB, &SENSOR3_SIGNALS_TA);
 
-	tc0 = HAL_GetTick();
+		//value = ConvertArraytoInteger((SENSOR1_SIGNALS.SDO_Readvalue), TAM_ARRAY);
 
-	if (mode == 0)
-		hconn = transport_open(h, p, s, apn);
-	else
-		hconn = transport_reopen_short(h, p, s);
+		Temperature = TemperatureMeasure (&(SENSOR1_SIGNALS_TA.SDO_Readvalue), &(SENSOR2_SIGNALS_TA.SDO_Readvalue));
+		RelativeHumidity = RHMeasure (&(SENSOR1_SIGNALS_RH.SDO_Readvalue), &(SENSOR2_SIGNALS_RH.SDO_Readvalue), Temperature);
+  /* USER CODE BEGIN 3 */
 
- 	if (hconn > 0) {
-		tc1 = HAL_GetTick();
- 		rc = MqttConnectB(hconn, us, pw);
- 		if (rc > 0){
-//			kind = "DEFAULT";
- 			conti = 0;
- 		}
- 		else {
- 			transport_close(hconn);
- 			hconn = 0;
+  }
+  /* USER CODE END 3 */
 
- 		}
- 	}
-	if (hconn <= 0)  {
-
-		// try with Contingency
- 		h = GetVariable("LIP");
- 		p = atoi(GetVariable("LPORT"));
- 		s = atoi(GetVariable("LSEC"));
- 		us = GetVariable("LUSER");
- 		pw = GetVariable("LPSWD");
- 		apn = GetVariable("LAPN");
- 		if (h && p && apn) {
-			if (mode == 0)
-				hconn = transport_open(h, p, s, apn);
-			else
-				hconn = transport_reopen_short(h, p, s);
-			if (hconn > 0 ) {
-				tc1 = HAL_GetTick();
-				rc = MqttConnectB(hconn, us, pw);
-				if (rc > 0){
-	//	 			kind = "CONTINGENCY";
-					conti = 1;
-				}
-				else {
-					transport_close(hconn);
-					hconn = 0;
-				}
-			}
- 		}
-	}
-	if (hconn > 0) {
-		// Update Last success connection vars
-		char txt1[8];
-		char txt2[8];
-		SetVariable("LIP", h);
-		itoa(p, txt1, 10);
-		SetVariable("LPORT", txt1);
-		SetVariable("LUSER", us);
-		SetVariable("LPSWD", pw);
-		itoa(s, txt2, 10);
-		SetVariable("LSEC", txt2);
-		SetVariable("LAPN", apn);
-
-
-		SetVariable("ID", GetVariable("IMEI"));
-
-
-		tc2 = HAL_GetTick();
-
-		SaveConnParams(); // SAVE ALL (but only LAST CONNECT GROUP need to be stored)
-
-//		char *id = GetVariable("ID");
-//		char *myip = GetVariable("LOCALIP");
-//		char *sim = GetVariable("IDSIM");
-
-//		tprintf (hconn, "%s %s (%s, %s by %s) to %s:%d as IP %s and SIM %s.", id, mode?"RECONNECTED":"CONNECT", kind, (s)?"TLS":"TCP", (bydma?"DMA":"IRQ"), h, p, myip, sim);
-//		tprintf (hconn, "Times elapsed %ld, %ld, %ld (%ld + %ld = %ld)", t0, t1, t2 , (t1-t0), (t2-t1), (t2-t0));
-	}
-	return hconn;
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////////
-//	A pair of helper functions to
-//	Open a "full" connection (from scratch)
-//	Make a "short" reconnection (from an existing connection))
-/////////////////////////////////////////////////////////////////////////////////////////////
-int	OpenNewConnection(){
-	return OpenConnection(0);
-}
-
-int	ShortReconnection(){
-	return OpenConnection(1);
-}
-
- int	COMM_Init(){
- 	 int hconn = OpenNewConnection();
-// 	 SetVariable("ID", id0);
- 	 if (hconn > 0){
-		int rc;
-
-		char *host = GetVariable("LIP");
-		char *port = GetVariable("LPORT");
-		char *apn = GetVariable("LAPN");
-		char *myip = GetVariable("LOCALIP");
-		char *sim = GetVariable("IDSIM");
-		char *imei = GetVariable("IMEI");
-
-		char *id = GetVariable("ID");
-
-		// allocate the topic strings.
-		// Test before to do it only once!!!
-		if (!topicpub){
-			topicpub = malloc (strlen(topicroot) + 1 + strlen(topicpub0) + 1);
-			sprintf (topicpub, "%s/%s", topicroot, topicpub0);
-		}
-		if (!topicsub){
-			topicsub= malloc (strlen(topicroot) + 1 + strlen (topicsub0) + 1 + strlen(id) + 1);
-			sprintf (topicsub, "%s/%s/%s", topicroot, topicsub0, id);
-		}
-		if (!topicbrcast){
-			topicbrcast = malloc (strlen(topicroot) + 1 + strlen (topicsub0) + 1 + strlen (broadcast) + 1);
-			sprintf (topicbrcast, "%s/%s/%s", topicroot, topicsub0, broadcast);
-		}
-		if (!topictr){
-			topictr = malloc (strlen(topicroot) + 1 + strlen (topictr0) + 1 + strlen (id) + 1);
-			sprintf (topictr, "%s/%s/%s", topicroot, topictr0, id);
-		}
-
-		//		tprintf (hconn, "%s %s (%s, %s by %s) to %s:%d as IP %s and SIM %s.", id, mode?"RECONNECTED":"CONNECT", kind, (s)?"TLS":"TCP", (bydma?"DMA":"IRQ"), h, p, myip, sim);
-		//		tprintf (hconn, "Times elapsed %ld, %ld, %ld (%ld + %ld = %ld)", t0, t1, t2 , (t1-t0), (t2-t1), (t2-t0));
-		tprintf (hconn, "%s CONNECTED (%s %s) to %s:%s by %s as IP %s, IMEI %s and SIM %s.\n", id, conti?"CONTINGENCY":"DEFAULT", (bydma?"DMA":"IRQ"), host, port, apn, myip, imei, sim);
-
-		do {
-			 rc = MqttSubscribe(hconn, topicsub) && MqttSubscribe(hconn, topicbrcast);
-		 } while (rc < 1);
-		 tprintf (hconn, "Successfully subscripted to #%s#, #%s#", topicsub, topicbrcast);
- 	 }
-	 return hconn;
-}
-
-
-int	SHORTNEWCONN(){
-	int rc;
-	int	hconn;
-
-	if (1)
-		SaveConnParams(); // (maybe a is for 5;) Save (but only DEFAULT GROUP need to be stored)
-						  //  to be improved in a future
-
-#ifdef DEBUG
-		tprintf (hmqtt, "Go to SHORT DISCONNECT from this server and connect to %s.\nBye", GetVariable("IP"));
-		HAL_Delay(2000); // give trace time to arrive before disconnect
-#endif
-	rc = MqttDisconnectB(hmqtt);
-
-	hconn = ShortReconnection();  // "short" reopen,
-	if (hconn > 0){
-		char *host = GetVariable("LIP");
-		char *port = GetVariable("LPORT");
-		char *id = GetVariable("ID");
-		char *myip = GetVariable("LOCALIP");
-
-		tprintf (hconn, "%s SHORT RECONNECT (%s %s) to %s:%s as IP %s .\n", id, conti?"CONTINGENCY":"DEFAULT", (bydma?"DMA":"IRQ"), host, port, myip);
-
-		 do {
-			 rc = MqttSubscribe(hconn, topicsub) && MqttSubscribe(hconn, topicbrcast);
-		 } while (rc < 1);
-		 tprintf (hconn, "Successfully subscripted to #%s#, #%s#", topicsub, topicbrcast);
-	}
-	return hconn;
-}
-
-int	FULLNEWCONN(){
-	int hrec;
-	do {
-		hrec = NEWCONN(0);
-	} while (hrec <= 0);
-	tprintf (hmqtt, "Reconnection Times (%ld TCP + %ld MQTT = %ld TOTAL)\n", (tc1-tc0), (tc2-tc1), (tc2-tc0));
-
-	hmqtt = hrec;
-	return hmqtt;
-}
-
-int	FULLNEWCONNOLD(){
-	int rc;
-	int	hconn;
-
-	if (1)
-		SaveConnParams(); // (maybe a is for 5;) Save (but only DEFAULT GROUP need to be stored)
-						  //  to be improved in a future
-
-#ifdef DEBUG
-		tprintf (hmqtt, "Go to LONG DISCONNECT from this server and connect to %s.\nBye", GetVariable("IP"));
-		HAL_Delay(2000); // give trace time to arrive before disconnect
-#endif
-	rc = MqttDisconnect(hmqtt);  // This performs FULL disconnection
-
-	hconn = OpenNewConnection();
-//	hconn = FullReconnection();  // "short" reopen,
-	if (hconn > 0){
-		char *id = GetVariable("ID");
-		char *host = GetVariable("LIP");
-		char *port = GetVariable("LPORT");
-		char *apn = GetVariable("LAPN");
-		char *myip = GetVariable("LOCALIP");
-
-		tprintf (hconn, "%s LONG RECONNECT (%s %s) to %s:%s by %s as IP %s .\n", id, conti?"CONTINGENCY":"DEFAULT", (bydma?"DMA":"IRQ"), host, port, apn, myip);
-
-		 do {
-			 rc = MqttSubscribe(hconn, topicsub) && MqttSubscribe(hconn, topicbrcast);
-		 } while (rc < 1);
-		 tprintf (hconn, "Successfully subscripted to #%s#, #%s#", topicsub, topicbrcast);
-	}
-	return hconn;
-}
-
-
-int	NEWCONN(int modo){
-	int rc;
-	int	hconn;
-
-	if (1)
-		SaveConnParams(); // (maybe a is for 5;) Save (but only DEFAULT GROUP need to be stored)
-						  //  to be improved in a future
-
-#ifdef DEBUG
-	tprintf (hmqtt, "Go to %s DISCONNECT from this server and connect to %s:%s.\nBye", modo?"SHORT":"FULL", GetVariable("IP"), GetVariable("PORT"));
-		HAL_Delay(2000); // give trace time to arrive before disconnect
-#endif
-	// This performs FULL disconnection
-	rc = MqttDisconnectB(hmqtt);
-
-//	if (modo == 0)
-//		transport_close(hmqtt);
-
-	if (modo)
-		hconn = OpenConnection(1);   // "short", reopen
-	else
-		hconn = OpenConnection(0);  // "full" open,
-
-	if (hconn > 0){
-		char *id = GetVariable("ID");
-		char *host = GetVariable("LIP");
-		char *port = GetVariable("LPORT");
-		char *apn = GetVariable("LAPN");
-		char *myip = GetVariable("LOCALIP");
-
-		tprintf (hconn, "%s %s RECONNECT (%s %s) to %s:%s by %s as IP %s .\n", id, modo?"SHORT":"FULL", conti?"CONTINGENCY":"DEFAULT", (bydma?"DMA":"IRQ"), host, port, apn, myip);
-
-		 do {
-			 rc = MqttSubscribe(hconn, topicsub) && MqttSubscribe(hconn, topicbrcast);
-		 } while (rc < 1);
-		 tprintf (hconn, "Successfully subscripted to #%s#, #%s#", topicsub, topicbrcast);
-	}
-	return hconn;
-}
-
-int rearm_stored(){
-	SetPeriodics();
-}
-
-
-
-int daily_rearm(void) {
-	rearm_stored();
-}
-
-
-int main0(){
-	return main2();
-}
-int modem_init = 0;
-int main2(void) {
-
-	int	x = 1;
-	int y = 2;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	x = x +1;
-	y = y + x;
-	y = y + x;
-	y = y + x;
-	y = y + x;
-//	HAL_Init();
-//	HAL_Delay(3000);
-	return main0();
-}
-/**/
-
-int main(void) {
-	int		ntries = 0;		// Counter of the number of attempts to connect
-	int		lomio = 1;
-	char	strint[8];		// string to convert integers to text
-	int	a = 1;
-	int b = 2;
-	uint8_t dataFromFlash[128];
-	int okFlash=0;
-	/* Added by Owais */
-	uint32_t ArrIDs[5] = {0x1111,0x1000,0x2222,0x2000,0x3333};
-	CanTxMsgTypeDef canMsgTx;
-	HAL_StatusTypeDef hal_txStat;
-	uint32_t cnt_TxSuccess = 0, cnt_RxSuccess = 0;
-	uint32_t cnt_TxFail = 0;
-	EnumCQErrors enCQErr;
-	CanRxMsgTypeDef canMsgRx;
-	CanRxMsgTypeDef* ptrRxMsg;
-
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	a = a +1;
-	b = b + a;
-	b = b + a;
-	b = b + a;
-	b = b + a;
-
-
-
-	/* MCU Configuration----------------------------------------------------------*/
-
-	/* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-	HAL_Init();
-
-	/* Configure the system clock */
-	SystemClock_Config();
-
-
-	/* USER CODE BEGIN SysInit */
-
-	/* USER CODE END SysInit */
-
-	/* Initialize all configured peripherals */
-	//MX_GPIO_Init();
-	greenON;
-	MX_ADC1_Init();
-	//MX_TIM3_Init();// francis
-	 MX_TIM7_Init();
-	 //MX_USART2_UART_Init();
-	 MX_USART6_UART_Init();
-	 //MX_IWDG_Init();
-
-	 //MX_I2C2_Init();
-	 initializePWM();
-	 //dimming(50);
-	 //dimming(70);
-	 //dimming(100);
-	 /* USER CODE BEGIN 2 */
-	 HAL_Delay(30);
-
-
-	 /* Initialize CAN by Owais */
-
-	 bool bInitRes = CAN1_Init(EnBitRate_250K, true, ArrIDs, 5);
-
-	 if(bInitRes == false)
-	 {
-		 _Error_Handler(__FILE__, __LINE__);
-	 }
-
-	 __enable_irq();
-
-	 canMsgTx.DLC = 8;
-	 canMsgTx.IDE = CAN_ID_EXT;
-	 canMsgTx.ExtId = 0x111;
-	 canMsgTx.RTR = CAN_RTR_DATA;
-
-	 for(int i=0; i<8; i++)
-		 canMsgTx.Data[i] = i*11+11;
-
-	 while (1)
-	 {
-		 hal_txStat = CAN1_Write_Msg(&canMsgTx);
-
-		 if(hal_txStat == HAL_OK)
-			 cnt_TxSuccess++;
-		 else
-			 cnt_TxFail++;
-
-		 HAL_Delay(500);/* dont send too many messages or the can adapter gets unresponsive */
-
-		 /* Receive all can messages in circular queue buffer */
-		 while(true)
-		 {
-			 ptrRxMsg = CAN1_Read_Msg(&enCQErr);
-			 canMsgRx = *ptrRxMsg;
-
-			 if(enCQErr == CQ_ERROR_OK)
-			 {
-				 cnt_RxSuccess++;
-			 }
-			 else
-			 {
-				 break;
-			 }
-		 }
-		 /* CAN RX processing loop */
-	 }
-
-	 /* USER CODE END 2 */
-
-	 /* Infinite loop */
-	 /* USER CODE BEGIN WHILE */
-
-}
-
-void	EnableRXGPRG(){
-	if(!bydma)
-		HAL_UART_Receive_IT(&huart6, &dataByteBufferIRQ, 1); // Enabling IRQ
-}
-
-
-int	Publish(char *message) {
-	int rc = MqttPutMessage(hmqtt, topicpub, message);
-	return rc;
-}
-
-int	Log(char *message) {
-	int rc = MqttPutMessage(hmqtt, topictr, message);
-	return rc;
 }
 
 
@@ -639,8 +236,11 @@ void SystemClock_Config(void)
 
     /**Initializes the CPU, AHB and APB busses clocks 
     */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_LSI
+                              |RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = 16;
   RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_NONE;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -674,42 +274,7 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
-/* ADC1 init function */
-static void MX_ADC1_Init(void)
-{
 
-  ADC_ChannelConfTypeDef sConfig;
-
-    /**Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
-    */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV2;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-    /**Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
-    */
-  sConfig.Channel = ADC_CHANNEL_1;
-  sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
 
 /* IWDG init function */
 static void MX_IWDG_Init(void)
@@ -724,118 +289,6 @@ static void MX_IWDG_Init(void)
   }
 
 }
-
-/* TIM3 init function */
-static void MX_TIM3_Init(void)
-{
-
-  TIM_MasterConfigTypeDef sMasterConfig;
-  TIM_OC_InitTypeDef sConfigOC;
-
-  htim3.Instance = TIM3;
-  htim3.Init.Prescaler = (SystemCoreClock/1000)-1;
-  htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 10; //10ms
-  htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-
-
-  if (HAL_TIM_Base_Init(&htim3) != HAL_OK) //francis
-    {
-      _Error_Handler(__FILE__, __LINE__);
-    }
-
-  /*
-  if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim3, &sMasterConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 0;
-  sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
-  sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
-  if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_4) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  HAL_TIM_MspPostInit(&htim3);
-  */
-
-}
-
-/* TIM7 init function */
-static void MX_TIM7_Init(void)
-{
-
-  TIM_MasterConfigTypeDef sMasterConfig;
-
-  htim7.Instance = TIM7;
-  //htim7.Init.Prescaler = 0;
-  htim7.Init.Prescaler = (SystemCoreClock/1000)-1;;
-  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 10000;
-  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
-  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
-  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
-  if (HAL_TIMEx_MasterConfigSynchronization(&htim7, &sMasterConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
-/* USART2 init function */
-static void MX_USART2_UART_Init(void)
-{
-
-  huart2.Instance = USART2;
-  huart2.Init.BaudRate = 19200;
-  huart2.Init.WordLength = UART_WORDLENGTH_8B;
-  huart2.Init.StopBits = UART_STOPBITS_1;
-  huart2.Init.Parity = UART_PARITY_NONE;
-  huart2.Init.Mode = UART_MODE_TX_RX;
-  huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart2) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
-/* USART6 init function */
-static void MX_USART6_UART_Init(void)
-{
-
-  huart6.Instance = USART6;
-  huart6.Init.BaudRate = 19200;
-  huart6.Init.WordLength = UART_WORDLENGTH_8B;
-  huart6.Init.StopBits = UART_STOPBITS_1;
-  huart6.Init.Parity = UART_PARITY_NONE;
-  huart6.Init.Mode = UART_MODE_TX_RX;
-  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
-  if (HAL_UART_Init(&huart6) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-}
-
 
 
 /** Configure pins as 
@@ -950,74 +403,7 @@ static void MX_GPIO_Init(void)
 
 
 /* USER CODE BEGIN 4 */
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
 
-
-
-
-  if (huart->Instance==GPRS_UART.Instance)
- {
-	  if (! bydma) { // only if not BYDMA
-	  	 nirqs++;
-	  		 allnew += Write(DataBuffer, dataByteBufferIRQ);
-	  		 if (IsFull(DataBuffer)) {
-	  			DataBuffer->overruns++;
-	  		}
-//	  		{
-//	  			int nextw = (write_offset + 1) % bufsize;  // next position to be written
-//	  			Cbuffer[write_offset++] =  dataByteBufferIRQ;
-//	  			write_offset = nextw;
-//	  	 	 	allnew += Write(dataByteBufferIRQ);
-	  			balnew++;
-//	  		}
-
-//			 (huart,&dataByteBufferIRQ,1);
-//	  	 }
-//	  	 {
-	  			/**
-			  GPRSBufferReceivedBytes++;
-			  GPRSbuffer[indexGPRSBufferReceived]=dataByteBufferIRQ;
-			  indexGPRSBufferReceived=(indexGPRSBufferReceived+1)%SIZE_GPRS_BUFFER;
-	  		  allold++;
-	  		  balold++;
-	  		  **/
-//	  	 }
-	  		  HAL_UART_Receive_IT(huart,&dataByteBufferIRQ,1);
-	  }
-  }
-
-
-
-
-
-
-
-}
-
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-
-	HAL_NVIC_DisableIRQ(TIM7_IRQn);
-	if (htim->Instance==TIM7)
-	{
-	  	 AddSeconds(10);
-
-        elapsed10seconds++;
-		if (elapsed10seconds%TIMING_TIMEOUT_GPRS==0)
-
-		{
-			/// Tiempo timeoutGPRS
-			timeoutGPRS=1;
-
-		}
-
-
-	}
-	HAL_NVIC_EnableIRQ(TIM7_IRQn);
-
-
-}
 /* USER CODE END 4 */
 
 /**
