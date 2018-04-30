@@ -93,6 +93,9 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
  */
 #include "GPIO_wrapper.h"
 
+/* The purpose of the following main code is testing a specific SHT10 Temperature & Humidity sensor
+ * Datasheet is here: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
+ */
 
 EMU_GPIO_Signal CS_1;
 EMU_GPIO_Signal SCK_1;
@@ -108,35 +111,55 @@ SignalsValue SENSOR2_SIGNALS_TA;
 SignalsValue SENSOR3_SIGNALS_TA;
 
 
-// sequence humidity RH
+/* According the datasheet sensor, we have to emulate Clock and Data signals in order to get a properly
+ * communication with the sensor. In our case, we have divided the complete signal sequence in three separated
+ * parts as follow:
+ *
+ * 	- Part1: Build the Start Transmission sequence and Send Command
+ * 	- Part2: Receive the response from sensor (2 bytes)
+ * 	- Part3: Receive the CRC checksum
+ *
+ * 	The sequence implementation is a programmer choice. It's not mandatory to use this testing example.
+ */
 
- char *Stream_CS_RH_1 =  "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+/*CASE 1:  MEASURE TEMPERATURE*/
+/*Build the sequence for Part1. In our case, we will only use SCK and SDO signals.
+ * CS and SDI signals must be defined as "XXXX...." string.
+ */
+char *Stream_CS_RH_1 =  "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 char *Stream_SDI_RH_1 = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+char *Stream_SCK_RH_1 = "XXXXXXXX1101100010101010101010100010";		//Start Transmission and Clock signal
+char *Stream_SDO_RH_1 = "11111111100011000XXXXXXXX1X0X1XXXXXX";		//Start Transmission and Send Command "Measure Relative Humidity"
 
-char *Stream_SCK_RH_1 = "XXXXXXXX1101100010101010101010100010";
-char *Stream_SDO_RH_1 = "11111111100011000XXXXXXXX1X0X1XXXXXX";
-
+//Build the sequence for Part 2. In our case, we have divided the sensor response in 2 separated bytes
+//SCK and SDO signals are the same in both sequence
 char *Stream_SDI_RH_1_partB = "XXXXXXXXXXXXXXXXXXXX";
 char *Stream_CS_RH_1_partB =  "XXXXXXXXXXXXXXXXXXXX";
 char *Stream_SCK_RH_1_partB = "1010101010101010XX10";
+char *Stream_SDO_RH_1_partB = "RXRXRXRXRXRXRXRXX000";
 
- char *Stream_SDO_RH_1_partB = "RXRXRXRXRXRXRXRXX000";
- char *Stream_SDO_RH_1_partCHK = "RXRXRXRXRXRXRXRXXXXX";
+//Build the Part 3: CRC checksum sequence
+char *Stream_SDO_RH_1_partCHK = "RXRXRXRXRXRXRXRXXXXX";
 
 
 
-// sequence temperature
-
+/*CASE 2:  MEASURE RH.
+ * Build the sequence for Part1. In our case, we will only use SCK and SDO signals.
+ * CS and SDI signals must be defined as "XXXX...." string.
+ */
 char *Stream_CS_TA_1 =  "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
 char *Stream_SDI_TA_1 = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
-char *Stream_SCK_TA_1 = "XXXXXXXX1101100010101010101010100010";
-char *Stream_SDO_TA_1 = "11111111100011000XXXXXXXXXX1XXXXXXXX";
+char *Stream_SCK_TA_1 = "XXXXXXXX1101100010101010101010100010";		//Start Transmission and Clock signal
+char *Stream_SDO_TA_1 = "11111111100011000XXXXXXXXXX1XXXXXXXX";		//Start Transmission and Send Command "Measure Relative Temperature"
 
+//Build the sequence for Part 2. In our case, we have divided the sensor response in 2 separated bytes
+//SCK and SDO signals are the same in both sequence
 char *Stream_SDI_TA_1_partB = "XXXXXXXXXXXXXXXXXXXX";
 char *Stream_CS_TA_1_partB =  "XXXXXXXXXXXXXXXXXXXX";
 char *Stream_SCK_TA_1_partB = "1010101010101010XX10";
-
 char *Stream_SDO_TA_1_partB = "RXRXRXRXRXRXRXRXX000";
+
+//Build the Part 3: CRC checksum sequence
 char *Stream_SDO_TA_1_partCHK = "RXRXRXRXRXRXRXRXXXXX";
 /*****************************************************************************/
 
@@ -155,8 +178,8 @@ int main(void)
   /* USER CODE BEGIN 1 */
 	uint8_t value = 0;
 	uint8_t  readwrite= 0;
-	float Temperature = 0;
-	float RelativeHumidity = 0;
+	float Temperature = 0;				//Variable to store the Temperature value read
+	float RelativeHumidity = 0;			//Variable to store the RH read
   /* USER CODE END 1 */
   /* MCU Configuration----------------------------------------------------------*/
 
@@ -178,7 +201,9 @@ int main(void)
  // MX_GPIO_Init();
   /* USER CODE BEGIN 2 */
 
-
+  	/*In our test EVB, the sensor pins are connected as follow
+  	 * This could change in other EVB or PCB
+  	 */
 	value = EMU_GPIO_config(&CS_1,PB1, OUTPUT,UP);
 	value = EMU_GPIO_config(&SCK_1,PC8, OUTPUT,NONE);
 	value = EMU_GPIO_config(&SDI_1,PB1, OUTPUT,UP);
@@ -186,6 +211,7 @@ int main(void)
 
   //HAL_Delay(1000);
 
+ //Now, we register our sensor as SENSOR1
   config_Sensor(&SENSOR1, CS_1, SCK_1, SDI_1, SDO_1, TIMMING_1);
 
 
@@ -197,25 +223,41 @@ int main(void)
   {
   /* USER CODE END WHILE */
 
+	  //We are going to get the RH value from sensor. We will use the EMU_GPIO_Read_Write function
+	  // to emulate the proper signals
+	  //First, emulate Part 1 signals
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1, Stream_SDI_RH_1, Stream_SDO_RH_1, Stream_SCK_RH_1, &SENSOR1_SIGNALS_RH);
+		//As datasheet indicates, the RH measurement takes a maximum of 80ms
 		HAL_Delay(90);
 
+		//Then, emulate Part 2
+		//The first byte response from sensor are saved in SENSOR_SIGNALS1_RH->SDO_Readvalue
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partB, Stream_SCK_RH_1_partB, &SENSOR1_SIGNALS_RH);
+		//The second byte response from sensor are saved in SENSOR_SIGNALS2_RH->SDO_Readvalue
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partB, Stream_SCK_RH_1_partB, &SENSOR2_SIGNALS_RH);
+		//To finish, emulate CRC cheksum signal. In our case, the signal is emulated but not validation was implemented.
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_RH_1_partB, Stream_SDI_RH_1_partB, Stream_SDO_RH_1_partCHK, Stream_SCK_RH_1_partB, &SENSOR3_SIGNALS_RH);
 
+		//Wait 3 seconds
 		HAL_Delay(3000);
 
+		//We are going to get the Temperature value from sensor. We will use the EMU_GPIO_Read_Write function
+	    // to emulate the proper signals
+		//First, emulate Part 1 signals
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1, Stream_SDI_TA_1, Stream_SDO_TA_1, Stream_SCK_TA_1, &SENSOR1_SIGNALS_TA);
+		//As datasheet indicates, the Temperature measurement takes a maximum of 320ms
 		HAL_Delay(400);
-
+		//Then, emulate Part 2
+		//The first byte response from sensor are saved in SENSOR_SIGNALS1_TA->SDO_Readvalue
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partB, Stream_SCK_TA_1_partB, &SENSOR1_SIGNALS_TA);
+		//The second byte response from sensor are saved in SENSOR_SIGNALS2_TA->SDO_Readvalue
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partB, Stream_SCK_TA_1_partB, &SENSOR2_SIGNALS_TA);
+		//To finish, emulate CRC cheksum signal. In our case, the signal is emulated but not validation was implemented.
 		readwrite = EMU_GPIO_Read_Write(&SENSOR1, Stream_CS_TA_1_partB, Stream_SDI_TA_1_partB, Stream_SDO_TA_1_partCHK, Stream_SCK_TA_1_partB, &SENSOR3_SIGNALS_TA);
 
-		//value = ConvertArraytoInteger((SENSOR1_SIGNALS.SDO_Readvalue), TAM_ARRAY);
-
+		//Convert the 2 bytes read for Temperature value to a decimal representation
 		Temperature = TemperatureMeasure (&(SENSOR1_SIGNALS_TA.SDO_Readvalue), &(SENSOR2_SIGNALS_TA.SDO_Readvalue));
+		//Convert the 2 bytes read for RH value to a decimal representation
 		RelativeHumidity = RHMeasure (&(SENSOR1_SIGNALS_RH.SDO_Readvalue), &(SENSOR2_SIGNALS_RH.SDO_Readvalue), Temperature);
   /* USER CODE BEGIN 3 */
 

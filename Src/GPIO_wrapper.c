@@ -393,6 +393,7 @@ void config_Sensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal 
 /*****************************************************************************
  * Function name    : TemperatureMeasure
  * 	  @brief		: Auxiliary function that calculates the temperature from SHT10 sensor
+ * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
  *
  *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
  *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value
@@ -423,6 +424,7 @@ float TemperatureMeasure (char *array1, char *array2)
 /*****************************************************************************
  * Function name    : RHMeasure
  * 	  @brief		: Auxiliary function that calculates the relative humidity from SHT10 sensor
+ * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
  *
  *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
  *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value

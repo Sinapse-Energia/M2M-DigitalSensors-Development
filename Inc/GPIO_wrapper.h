@@ -15,8 +15,8 @@
 #include "string.h"
 #include "stdbool.h"
 
-#define NUMBYTES 1
-#define TAM_ARRAY NUMBYTES*8
+#define NUMBYTES 1						//Number of bytes to receive from a specific GPIO Input signal
+#define TAM_ARRAY NUMBYTES*8			//Array size
 
 /**
   * @brief   EMU_GPIO_Signal structure definition
@@ -24,7 +24,7 @@
 typedef struct{
 
 	GPIO_TypeDef *PORT;				//Pointer to Peripheral_declaration GPIO Port
-	uint16_t PIN;					//GPIO_PIN number with "mask"
+	uint16_t PIN;					//GPIO_PIN number with "mask". Ex: GPIO_PIN_2 = ((uint16_t)0x0004)
 	uint16_t numberPIN;				//Integer Pin value: 0 to 15
 }EMU_GPIO_Signal;
 
