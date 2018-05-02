@@ -15,6 +15,7 @@
 #include "string.h"
 #include "stdbool.h"
 
+
 #define NUMBYTES 1						//Number of bytes to receive from a specific GPIO Input signal
 #define TAM_ARRAY NUMBYTES*8			//Array size
 
@@ -91,14 +92,13 @@ typedef struct{
 /* Initialization and definitions functions *****************************/
 bool EMU_GPIO_config(EMU_GPIO_Signal *SIGNAL, EMU_GPIO_Pins PXY, EMU_GPIO_Mode MODE, EMU_GPIO_Pull PULL);
 bool EMU_GPIO_SetMode(EMU_GPIO_Signal *SIGNAL, EMU_GPIO_Mode MODE);
-void config_Sensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal Signal2, EMU_GPIO_Signal Signal3,
+void EMU_GPIO_SetupSensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal Signal2, EMU_GPIO_Signal Signal3,
 		EMU_GPIO_Signal Signal4, uint16_t WPULSE);
 
 bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SDI,char* Stream_SDO,
 							char *Stream_SCK, SignalsValue *Signals);
-uint8_t ConvertArraytoInteger(char *array, uint8_t tam);
-float TemperatureMeasure (char *array1, char *array2);
-float RHMeasure (char *array1, char *array2, float TA);
+
+void GPIO_check(EMU_GPIO_Signal signal, char *genericStream, char *ReadValue, uint8_t index);
 
 
 

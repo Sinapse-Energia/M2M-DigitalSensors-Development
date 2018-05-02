@@ -204,7 +204,7 @@ int main(void)
   	/*In our test EVB, the sensor pins are connected as follow
   	 * This could change in other EVB or PCB
   	 */
-	value = EMU_GPIO_config(&CS_1,PB1, OUTPUT,UP);
+	value = EMU_GPIO_config(&CS_1,PB5, OUTPUT,UP);
 	value = EMU_GPIO_config(&SCK_1,PC8, OUTPUT,NONE);
 	value = EMU_GPIO_config(&SDI_1,PB1, OUTPUT,UP);
 	value = EMU_GPIO_config(&SDO_1,PB14, OPENDRAIN,UP);
@@ -212,7 +212,7 @@ int main(void)
   //HAL_Delay(1000);
 
  //Now, we register our sensor as SENSOR1
-  config_Sensor(&SENSOR1, CS_1, SCK_1, SDI_1, SDO_1, TIMMING_1);
+	EMU_GPIO_SetupSensor(&SENSOR1, CS_1, SCK_1, SDI_1, SDO_1, TIMMING_1);
 
 
   /* USER CODE END 2 */

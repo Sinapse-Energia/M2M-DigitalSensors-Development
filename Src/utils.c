@@ -9,9 +9,11 @@
 #include 	<stdio.h>
 #include 	<string.h>
 #include 	<stdarg.h>
+#include 	<Math.h>
 #include	"utils.h"
 #include	"NBinterface.h"		// any of them is implemented here
 #include 	"southbound_ec.h"	// NVM access functions
+#include	"GPIO_wrapper.h"
 
 
 struct tm	ECdatetime;
@@ -311,5 +313,94 @@ unsigned char	*getCertificateTxt(size_t *lcert){
 }
 
 
+/*****************************************************************************
+ * Function name    : TemperatureMeasure
+ * 	  @brief		: Auxiliary function that calculates the temperature from SHT10 sensor
+ * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
+ *
+ *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
+ *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value
+ *
+ * 	  @retval       : float Temperature value
+ *
+ * 	  Notes         : This function is only used for DEBUG purpose
+ *****************************************************************************/
+float TemperatureMeasure (char *array1, char *array2)
+{
+	float d2 = 0.01;
+	float d1 = -39.7;
+	float temperature = 0.0;
+
+	uint8_t byte1 = 0, byte2;
+
+	byte1 = ConvertArraytoInteger (array1, TAM_ARRAY);
+	byte2 = ConvertArraytoInteger (array2, TAM_ARRAY);
+
+	uint16_t integervalue = 256*byte1 + byte2;
+
+	temperature = integervalue*d2 + d1;
+
+	return temperature;
+
+}
+
+/*****************************************************************************
+ * Function name    : RHMeasure
+ * 	  @brief		: Auxiliary function that calculates the relative humidity from SHT10 sensor
+ * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
+ *
+ *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
+ *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value
+ *
+ * 	  @retval       : float Temperature value
+ *
+ * 	  Notes         : This function is only used for DEBUG purpose
+ *****************************************************************************/
+float RHMeasure (char *array1, char *array2, float TA)
+{
+	float c1 = -2.0468;
+	float c2 = 0.0367;
+	float c3 = -1.5955e-6;
+	float t1 = 0.01;
+	float t2 = 0.00008;
+	float RHlinear = 0, RHtrue = 0;
+
+	uint8_t byte1 = 0, byte2;
+
+	byte1 = ConvertArraytoInteger (array1, TAM_ARRAY);
+	byte2 = ConvertArraytoInteger (array2, TAM_ARRAY);
+
+	uint16_t integervalue = 256*byte1 + byte2;
+
+	RHlinear = c1 + c2*integervalue + c3* (pow(integervalue, 2));
+	RHtrue = (TA-25)*(t1 + t2*integervalue)+RHlinear;
+
+	return RHtrue;
+
+}
+
+/*****************************************************************************
+ * Function name    : ConvertArraytoInteger
+ * 	  @brief		: Auxiliary function to convert a boolean array to decimal value
+ *
+ *    @param1       : array1: bytes array 1/0
+ *    @param2       : tam: size array
+ *
+ * 	  @retval       : Returns a decimal value
+ *
+ * 	  Notes         : This function is only used for DEBUG purpose
+ *****************************************************************************/
+uint8_t ConvertArraytoInteger(char *array, uint8_t tam)
+{
+
+	uint8_t ret = 0;
+	uint8_t tmp;
+
+	for (uint8_t i = 0; i < tam; i++) {
+		tmp = array[i];
+		ret |= tmp << (tam - i - 1);
+	}
+	return ret;
+}
 
 

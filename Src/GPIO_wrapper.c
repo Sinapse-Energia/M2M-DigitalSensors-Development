@@ -11,10 +11,7 @@
  *****************************************************************************/
 #include "GPIO_wrapper.h"
 #include "stm32f2xx_hal.h"
-#include "string.h"
-#include "stdlib.h"
-#include "stdio.h"
-#include "Math.h"
+
 
 /*****************************************************************************
  * Function name    : EMU_GPIO_config
@@ -30,7 +27,9 @@
  *    				  This parameter can be one of the EMU_GPIO_Pull enum values
  * 	  @retval       : bool, true if successful
  *
- * Notes            :
+ * Notes            : This function makes:
+ * 						1) Init the SIGNAL structure that is part of a digital sensor. This structure will be used by other funcitons
+ * 						2) Config the GPIO HW in the same way that "MX_GPIO_Init()" function.
  *****************************************************************************/
 bool EMU_GPIO_config(EMU_GPIO_Signal *SIGNAL, EMU_GPIO_Pins PXY, EMU_GPIO_Mode MODE, EMU_GPIO_Pull PULL)
 {
@@ -189,18 +188,18 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 	uint8_t tam_SDO = strlen((const char*)Stream_SDO);
 	uint8_t tam_SCK = strlen((const char*)Stream_SCK);
 	uint8_t tam_Stream = 0;
-	uint16_t i = 0, cnt = 0, cnt1 =0, cnt2 = 0, cnt3 = 0, cnt4 = 0;
+	uint16_t i = 0, timming_counter = 0, CS_read_counter =0, SDI_read_counter = 0, SDO_read_counter = 0, SCK_read_counter = 0;
 	uint32_t result=0;
 
 	//Check if Stream signals have the same size
-	if ((tam_CS == tam_SDI) && (tam_SDO == tam_SCK))
+	if ((tam_CS == tam_SDI) && (tam_CS == tam_SCK) && (tam_CS == tam_SDO))
 	{
 		tam_Stream = tam_SCK;
 
 		for (i = 0; i < tam_Stream; i++)
 		{
 
-			if(Stream_SCK[i] == '1')
+			/*if(Stream_SCK[i] == '1')
 			{
 				//Check GPIO port output type and reconfigure GPIO mode (redundancy)
 				if((ID_SENSOR->SCK_signal.PORT->OTYPER & ID_SENSOR->SCK_signal.PIN) == ID_SENSOR->SCK_signal.PIN)
@@ -222,9 +221,10 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 
 				ID_SENSOR->SCK_signal.PORT->BSRR = (GPIO_BSRR_BR0 << (ID_SENSOR->SCK_signal.numberPIN)); //GPIO port bit reset
 
-			}
-
-			else if(Stream_SCK[i] == 'R')
+			}*/
+			GPIO_check(ID_SENSOR->SCK_signal, Stream_SCK, Signals->SCK_Readvalue, i);
+			//THE FOLLOWING CODE IS KEPT BECAUSE A BUG IN "GPIO_check()" FUNCTION.
+			if(Stream_SCK[i] == 'R')
 			{
 				//Change GPIO to INPUT mode
 				EMU_GPIO_SetMode(&(ID_SENSOR->SCK_signal), INPUT);
@@ -232,12 +232,12 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 				//Check GPIO port input data register
 				result = ID_SENSOR->SCK_signal.PORT->IDR & ID_SENSOR->SCK_signal.PIN;
 				//Save the read value in SignalsValue structure
-				if(result == 0)	Signals->SCK_Readvalue[cnt4] = 0;
-				else Signals->SCK_Readvalue[cnt4] = 1;
-				cnt4++;
+				if(result == 0)	Signals->SCK_Readvalue[SCK_read_counter] = 0;
+				else Signals->SCK_Readvalue[SCK_read_counter] = 1;
+				SCK_read_counter++;
 			}
 
-			if(Stream_CS[i] == '1')
+			/*if(Stream_CS[i] == '1')
 			{
 				//Check GPIO port output type and reconfigure GPIO mode (redundancy)
 				if((ID_SENSOR->CS_signal.PORT->OTYPER & ID_SENSOR->CS_signal.PIN) == ID_SENSOR->CS_signal.PIN)
@@ -258,9 +258,10 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 					EMU_GPIO_SetMode(&(ID_SENSOR->CS_signal), OUTPUT);
 
 				ID_SENSOR->CS_signal.PORT->BSRR = (GPIO_BSRR_BR0 << (ID_SENSOR->CS_signal.numberPIN)); //GPIO port bit reset
-			}
-
-			else if(Stream_CS[i] == 'R')
+			}*/
+			GPIO_check(ID_SENSOR->CS_signal, Stream_CS, Signals->CS_Readvalue, i);
+			//THE FOLLOWING CODE IS KEPT BECAUSE A BUG IN "GPIO_check()" FUNCTION.
+			if(Stream_CS[i] == 'R')
 			{
 				//Change GPIO to INPUT mode
 				EMU_GPIO_SetMode(&(ID_SENSOR->CS_signal), INPUT);
@@ -268,13 +269,13 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 				//Check GPIO port input data register
 				result = ID_SENSOR->CS_signal.PORT->IDR & ID_SENSOR->CS_signal.PIN;
 				//Save the read value in SignalsValue structure
-				if(result == 0)	Signals->CS_Readvalue[cnt1] = 0;
-				else Signals->CS_Readvalue[cnt1] = 1;
-				cnt1++;
+				if(result == 0)	Signals->CS_Readvalue[CS_read_counter] = 0;
+				else Signals->CS_Readvalue[CS_read_counter] = 1;
+				CS_read_counter++;
 			}
 
 
-			if(Stream_SDI[i] == '1')
+			/*if(Stream_SDI[i] == '1')
 			{
 				//Check GPIO port output type and reconfigure GPIO mode (redundancy)
 				if((ID_SENSOR->SDI_signal.PORT->OTYPER & ID_SENSOR->SDI_signal.PIN) == ID_SENSOR->SDI_signal.PIN)
@@ -295,8 +296,10 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 
 				//ID_SENSOR->SDI_signal.PORT->BRR = ID_SENSOR->SDI_signal.PIN;	//GPIO port bit reset
 				ID_SENSOR->SDI_signal.PORT->BSRR = (GPIO_BSRR_BR0 << (ID_SENSOR->SDI_signal.numberPIN)); //GPIO port bit reset
-			}
-			else if(Stream_SDI[i] == 'R')
+			}*/
+			GPIO_check(ID_SENSOR->SDI_signal, Stream_SDI, Signals->SDI_Readvalue, i);
+			//THE FOLLOWING CODE IS KEPT BECAUSE A BUG IN "GPIO_check()" FUNCTION.
+			if(Stream_SDI[i] == 'R')
 			{
 				//Change GPIO to INPUT mode
 				EMU_GPIO_SetMode(&(ID_SENSOR->SDI_signal), INPUT);
@@ -304,12 +307,12 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 				//Check GPIO port input data register
 				result = ID_SENSOR->SDI_signal.PORT->IDR & ID_SENSOR->SDI_signal.PIN;
 				//Save the read value in SignalsValue structure
-				if(result == 0)	Signals->SDI_Readvalue[cnt2] = 0;
-				else Signals->SDI_Readvalue[cnt2] = 1;
-				cnt2++;
+				if(result == 0)	Signals->SDI_Readvalue[SDI_read_counter] = 0;
+				else Signals->SDI_Readvalue[SDI_read_counter] = 1;
+				SDI_read_counter++;
 			}
 
-			if(Stream_SDO[i] == '1')
+			/*if(Stream_SDO[i] == '1')
 			{
 				//Check GPIO port output type and reconfigure GPIO mode (redundancy)
 				if((ID_SENSOR->SDO_signal.PORT->OTYPER & ID_SENSOR->SDO_signal.PIN) == ID_SENSOR->SDO_signal.PIN)
@@ -331,9 +334,10 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 
 				//ID_SENSOR->SDO_signal.PORT->BRR = ID_SENSOR->SDO_signal.PIN;	//GPIO port bit reset
 				ID_SENSOR->SDO_signal.PORT->BSRR = (GPIO_BSRR_BR0 << (ID_SENSOR->SDO_signal.numberPIN)); //GPIO port bit reset
-			}
-
-			else if(Stream_SDO[i] == 'R')
+			}*/
+			GPIO_check(ID_SENSOR->SDO_signal, Stream_SDO, Signals->SDO_Readvalue, i);
+			//THE FOLLOWING CODE IS KEPT BECAUSE A BUG IN "GPIO_check()" FUNCTION.
+			if(Stream_SDO[i] == 'R')
 			{
 				//Change GPIO to INPUT mode
 				EMU_GPIO_SetMode(&(ID_SENSOR->SDO_signal), INPUT);
@@ -341,19 +345,19 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 				//Check GPIO port input data register
 				result = ID_SENSOR->SDO_signal.PORT->IDR & ID_SENSOR->SDO_signal.PIN;
 				//Save the read value in SignalsValue structure
-				if(result == 0)	Signals->SDO_Readvalue[cnt3] = 0;
-				else Signals->SDO_Readvalue[cnt3] = 1;
-				cnt3++;
+				if(result == 0)	Signals->SDO_Readvalue[SDO_read_counter] = 0;
+				else Signals->SDO_Readvalue[SDO_read_counter] = 1;
+				SDO_read_counter++;
 			}
 
 			//Delay to stabilize the signal
+			/*__asm("nop");
 			__asm("nop");
 			__asm("nop");
 			__asm("nop");
-			__asm("nop");
-			__asm("nop");
+			__asm("nop");*/
 
-			for(cnt = 0; cnt < ID_SENSOR->TIMMING_pulse; cnt++){
+			for(timming_counter = 0; timming_counter < ID_SENSOR->TIMMING_pulse; timming_counter++){
 				__asm("nop");
 			}
 		}
@@ -364,7 +368,7 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
 }
 
 /*****************************************************************************
- * Function name    : config_Sensor
+ * Function name    : EMU_GPIO_SetupSensor
  * 	  @brief		: Configure a specific digital sensor
  *
  *    @param1       : SENSOR: pointer to a SensorType structure that contains
@@ -379,7 +383,7 @@ bool EMU_GPIO_Read_Write(SensorType *ID_SENSOR, char *Stream_CS, char *Stream_SD
  *
  * 	  Notes         :
  *****************************************************************************/
-void config_Sensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal Signal2, EMU_GPIO_Signal Signal3,
+void EMU_GPIO_SetupSensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal Signal2, EMU_GPIO_Signal Signal3,
 		EMU_GPIO_Signal Signal4, uint16_t WPULSE)
 {
 	SENSOR->CS_signal = Signal1;
@@ -391,92 +395,65 @@ void config_Sensor(SensorType *SENSOR, EMU_GPIO_Signal Signal1, EMU_GPIO_Signal 
 
 
 /*****************************************************************************
- * Function name    : TemperatureMeasure
- * 	  @brief		: Auxiliary function that calculates the temperature from SHT10 sensor
- * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
+ * Function name    : GPIO_check
+ * 	  @brief		: Function that check and configure a GPIO signal status
  *
- *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
- *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value
+ *    @param1       : signal: EMU_GPIO_Signal that mapping a specific signal
+ *    @param2       : genericStream: pointer to a Stream
+ *    @param3		: ReadValue: pointer to array where save the value read
+ *    @param4		: index: counter for the Stream array
  *
- * 	  @retval       : float Temperature value
+ * 	  @retval       : void
  *
- * 	  Notes         : This function is only used for DEBUG purpose
+ * 	  Notes         :
  *****************************************************************************/
-float TemperatureMeasure (char *array1, char *array2)
+void GPIO_check(EMU_GPIO_Signal signal, char *genericStream, char *ReadValue, uint8_t index)
 {
-	float d2 = 0.01;
-	float d1 = -39.7;
-	float temperature = 0.0;
+	uint16_t signal_read_counter = 0, timming_counter = 0;
+	uint32_t result = 0;
 
-	uint8_t byte1 = 0, byte2;
 
-	byte1 = ConvertArraytoInteger (array1, TAM_ARRAY);
-	byte2 = ConvertArraytoInteger (array2, TAM_ARRAY);
+	if(genericStream[index] == '1')
+	{
+		//Check GPIO port output type and reconfigure GPIO mode (redundancy)
+		if((signal.PORT->OTYPER & signal.PIN) == signal.PIN)
+			EMU_GPIO_SetMode(&(signal), OPENDRAIN);
+		else
+			EMU_GPIO_SetMode(&(signal), OUTPUT);
 
-	uint16_t integervalue = 256*byte1 + byte2;
+		signal.PORT->BSRR = (1 << signal.numberPIN); //GPIO port bit set
 
-	temperature = integervalue*d2 + d1;
-
-	return temperature;
-
-}
-
-/*****************************************************************************
- * Function name    : RHMeasure
- * 	  @brief		: Auxiliary function that calculates the relative humidity from SHT10 sensor
- * 	  				  More details in: https://www.sparkfun.com/datasheets/Sensors/SHT1x_datasheet.pdf
- *
- *    @param1       : array1: bytes array 1/0 with the first byte from sensor data read value
- *    @param2       : array2: bytes array 1/0 with the second byte from sensor data read value
- *
- * 	  @retval       : float Temperature value
- *
- * 	  Notes         : This function is only used for DEBUG purpose
- *****************************************************************************/
-float RHMeasure (char *array1, char *array2, float TA)
-{
-	float c1 = -2.0468;
-	float c2 = 0.0367;
-	float c3 = -1.5955e-6;
-	float t1 = 0.01;
-	float t2 = 0.00008;
-	float RHlinear = 0, RHtrue = 0;
-
-	uint8_t byte1 = 0, byte2;
-
-	byte1 = ConvertArraytoInteger (array1, TAM_ARRAY);
-	byte2 = ConvertArraytoInteger (array2, TAM_ARRAY);
-
-	uint16_t integervalue = 256*byte1 + byte2;
-
-	RHlinear = c1 + c2*integervalue + c3* (pow(integervalue, 2));
-	RHtrue = (TA-25)*(t1 + t2*integervalue)+RHlinear;
-
-	return RHtrue;
-
-}
-
-/*****************************************************************************
- * Function name    : ConvertArraytoInteger
- * 	  @brief		: Auxiliary function to convert a boolean array to decimal value
- *
- *    @param1       : array1: bytes array 1/0
- *    @param2       : tam: size array
- *
- * 	  @retval       : Returns a decimal value
- *
- * 	  Notes         : This function is only used for DEBUG purpose
- *****************************************************************************/
-uint8_t ConvertArraytoInteger(char *array, uint8_t tam)
-{
-
-	uint8_t ret = 0;
-	uint8_t tmp;
-
-	for (uint8_t i = 0; i < tam; i++) {
-		tmp = array[i];
-		ret |= tmp << (tam - i - 1);
 	}
-	return ret;
+
+	else if(genericStream[index] == '0')
+	{
+		//Check GPIO port output type and reconfigure GPIO mode (redundancy)
+		if((signal.PORT->OTYPER & signal.PIN) == signal.PIN)
+			EMU_GPIO_SetMode(&(signal), OPENDRAIN);
+		else
+			EMU_GPIO_SetMode(&(signal), OUTPUT);
+
+		signal.PORT->BSRR = (GPIO_BSRR_BR0 << (signal.numberPIN)); //GPIO port bit reset
+
+	}
+
+	//HERE, THERE IS A BUG. THE RESULT VALUE IS NOT CORRECT WHEN A GPIO STATUS IS READ
+	/*else if(genericStream[index] == 'R')
+	{
+		//Change GPIO to INPUT mode
+		EMU_GPIO_SetMode(&(signal), INPUT);
+
+		//Check GPIO port input data register
+		result = (signal.PORT->IDR) & (signal.PIN);
+		//Save the read value in SignalsValue structure
+		if(result == 0)	ReadValue[signal_read_counter] = 0;
+		else ReadValue[signal_read_counter] = 1;
+		signal_read_counter++;
+	}
+
+	for(timming_counter = 0; timming_counter < 50; timming_counter++){
+		__asm("nop");
+	}*/
+
 }
 

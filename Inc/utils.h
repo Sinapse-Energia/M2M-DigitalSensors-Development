@@ -53,6 +53,10 @@ extern	unsigned char 	*base64_decode(const char *data, size_t input_length, uint
 extern	uint8_t			*getCertificate(size_t *lcert);
 extern	uint8_t			*getCertificateTxt(size_t *lcert);
 
+uint8_t ConvertArraytoInteger(char *array, uint8_t tam);
+float TemperatureMeasure (char *array1, char *array2);
+float RHMeasure (char *array1, char *array2, float TA);
+
 #ifdef __cplusplus /* If this is a C++ compiler, use C linkage */
 }
 #endif
